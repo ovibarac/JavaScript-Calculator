@@ -1,0 +1,507 @@
+
+
+//Redux:
+const EVALUATE='EVALUATE';
+const CLEAR='CLEAR';
+const NEWVAL='NEWVAL'
+const NEWSTATE='NEWSTATE'
+
+//actions
+const doClear=()=>{
+  return{
+    type: CLEAR
+  }
+}
+
+const doNewVal=(newVal)=>{
+  return{
+    type: NEWVAL,
+    val: newVal
+  }
+}
+
+const doNewState=(newState)=>{
+  return{
+    type: NEWSTATE,
+    state: newState
+  }
+}
+
+const defaultState={
+  currentVal: '0',
+  prevVal: '0',
+  formula: '0',
+}
+
+const reducer = (state=defaultState, action)=>{
+  switch(action.type){
+    case CLEAR:
+      return defaultState;
+    case NEWVAL:
+      return{
+        currentVal: action.val,
+      }
+    case NEWSTATE:
+      console.log(action.state.currentVal);
+      return action.state;
+    default:
+      return state;
+  }
+}
+
+const store=Redux.createStore(reducer);
+
+//Vars:
+const isOperator = /[*/+-]/;
+const endsWithOperator = /[*+-/]$/;
+const endsWithNegativeSign = /\d[*/+-]{1}-$/;
+const clearStyle = { background: "linear-gradient(150deg, #ac3939, #5b1e1e)"};
+const operatorStyle = { background: "linear-gradient(150deg, #666666, #404040)"};
+const numberStyle = { background: "linear-gradient(150deg, #4d4d4d, #303030)"};
+const equalsStyle = {
+    background: "linear-gradient(150deg, #47476b, #252538)",
+    position: 'absolute',
+    height: 130,
+    bottom: 5
+  };
+const pressedStyle={
+  background: "linear-gradient(150deg, #252538, #1a1a27)"
+}
+
+//React:
+
+class Calculator extends React.Component{
+  constructor(props){
+    super(props);
+    
+    this.handleClear= this.handleClear.bind(this);
+    this.handleNumbers= this.handleNumbers.bind(this);
+    this.handleOperators= this.handleOperators.bind(this);
+    this.maxDigitWarning = this.maxDigitWarning.bind(this);
+    this.handleDecimal = this.handleDecimal.bind(this);
+    this.handleEvaluate = this.handleEvaluate.bind(this);
+  }
+  
+  maxDigitWarning() {
+      const newState={
+        currentVal: 'Digit Limit Met',
+        prevVal: this.props.currentVal,
+        formula: this.props.formula
+      };
+      this.props.dispatchState(newState);
+      console.log(this.props.currentVal);
+      setTimeout(() => {this.props.dispatchState({currentVal: this.props.prevVal, prevVal:this.props.prevVal, formula: this.props.formula})}, 1000);
+  }
+  
+  handleNumbers(e){
+    //number logic
+    //e: has the button value
+    
+    //doesn't let you add more numbers
+    if (!this.props.currentVal.includes('Limit')) {
+      
+      const value = e.target.value;
+
+      const prevVal=this.props.currentVal;
+      let currentVal='';
+      let formula='';
+
+      if(this.props.currentVal.length > 19){
+        this.maxDigitWarning();
+        return;
+      }else{
+        //if entering a new number
+        if(this.props.currentVal === '0' || isOperator.test(this.props.currentVal)){
+          currentVal = value;
+        //if appending to current number
+        }else{
+          currentVal = this.props.currentVal + value;
+        }
+        
+        //formula logic
+        formula=this.props.formula;
+        
+        formula = currentVal === '0' && value === '0'
+              ? formula === ''
+                ? value
+                : formula
+              : /([^.0-9]0|^0)$/.test(formula)
+              ? formula.slice(0, -1) + value
+              : formula + value
+        
+        
+        }
+        //change state
+        const newState={
+          currentVal: currentVal,
+          prevVal: prevVal,
+          formula: formula
+        }
+        this.props.dispatchState(newState);
+    
+  }
+}
+  
+  handleOperators(e){
+    //operators logic
+    //e: has the button value
+    
+    //doesn't let you add more operators
+    if (!this.props.currentVal.includes('Limit')) {
+
+      const value = e.target.value;
+
+      let currentVal=this.props.currentVal;
+      let prevVal=this.props.prevVal
+      let formula=this.props.formula;
+      
+      currentVal=value;
+      
+      //if the operator comes after a number
+      if (!endsWithOperator.test(formula)) {
+          prevVal= formula;
+          formula= formula + value;
+      //- is allowed after an operator
+      } else if (!endsWithNegativeSign.test(formula)) {
+          formula=(endsWithNegativeSign.test(formula + value) ? formula : prevVal) + value;
+      } else if (value !== '‑') {
+          formula= prevVal + value;
+      }
+      
+      //change state
+      const newState={
+          currentVal: currentVal,
+          prevVal: prevVal,
+          formula: formula
+        }
+      this.props.dispatchState(newState);
+    }
+  }
+  
+  handleDecimal(){
+    //decimal logic
+    
+    let currentVal=this.props.currentVal;
+    let prevVal=this.props.prevVal
+    let formula=this.props.formula;
+    
+    //if a new decimal is valid
+    if (!this.props.currentVal.includes('.') &&
+        !this.props.currentVal.includes('Limit')) {
+      
+      //if . is not appended to a number
+      if (endsWithOperator.test(this.props.formula) ||
+         (this.props.currentVal === '0' && this.props.formula === '')){
+        currentVal = '0.';
+        formula = this.props.formula + '0.';
+      }else{
+        currentVal= this.props.formula.match(/(-?\d+\.?\d*)$/)[0] + '.'; 
+        formula= this.props.formula + '.';
+      }
+      
+      //change state
+      const newState={
+          currentVal: currentVal,
+          prevVal: prevVal,
+          formula: formula
+        }
+      this.props.dispatchState(newState);
+    }
+    
+  }
+  
+  handleEvaluate(){
+    //formula evaluation logic
+    
+    //if screen is not full
+    if(!this.props.currentVal.includes('Limit')){
+      let expression = this.props.formula;
+      
+      //remove operators at the end
+      while (endsWithOperator.test(expression)) {
+        expression = expression.slice(0, -1);
+      }
+      
+      //evaluate expression with set precision
+      let answer = Math.round(1000000000000 * eval(expression)) / 1000000000000;
+      console.log(answer);
+      
+      //change state
+      const newState={
+          currentVal: String(answer),
+          prevVal: String(answer),
+          formula: String(answer)
+        }
+      this.props.dispatchState(newState);
+     
+    }
+  }
+  
+  handleClear(){
+    //reset state
+    this.props.dispatchClear();
+  }
+
+  render(){
+    return(
+      <div id="calculator">
+        <Forumula formula={this.props.formula}/>
+        <Output currentVal={this.props.currentVal}/>
+        <Buttons
+          clear={this.handleClear}
+          numbers={this.handleNumbers}
+          operators={this.handleOperators}
+          decimal={this.handleDecimal}
+          evaluate={this.handleEvaluate}
+        />
+      </div>
+    )
+  }
+}
+
+class Buttons extends React.Component{
+  constructor(props){
+    super(props);
+  }
+  
+  render(){
+    return(
+      <div id="buttons">
+        <Button 
+          idp="clear"
+          className="big"
+          value="AC"
+          style={clearStyle}
+          onClick={this.props.clear}
+          keyCode='8'
+        />
+        <Button 
+          idp="divide"
+          value="/"
+          style={operatorStyle}
+          onClick={this.props.operators}
+          keyCode='111'
+        />
+        <Button 
+          idp="multiply"
+          value="*"
+          style={operatorStyle}
+          onClick={this.props.operators}
+          keyCode='106'
+        />
+        <Button 
+          idp="seven"
+          value="7"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='103'
+        />
+        <Button 
+          idp="eight"
+          value="8"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='104'
+        />
+        <Button 
+          idp="nine"
+          value="9"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='105'
+        />
+        <Button 
+          idp="subtract"
+          value="-"
+          style={operatorStyle}
+          onClick={this.props.operators}
+          keyCode='109'
+        />
+        <Button 
+          idp="four"
+          value="4"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='100'
+        />
+        <Button 
+          idp="five"
+          value="5"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='101'
+        />
+        <Button 
+          idp="six"
+          value="6"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='102'
+        />
+        <Button 
+          idp="add"
+          value="+"
+          style={operatorStyle}
+          onClick={this.props.operators}
+          keyCode='107'
+        />
+        <Button 
+          idp="one"
+          value="1"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='97'
+        />
+        <Button 
+          idp="two"
+          value="2"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='98'
+        />
+        <Button 
+          idp="three"
+          value="3"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='99'
+        />
+        <Button 
+          idp="zero"
+          className="big"
+          value="0"
+          style={numberStyle}
+          onClick={this.props.numbers}
+          keyCode='96'
+        />
+        <Button 
+          idp="decimal"
+          value="."
+          style={operatorStyle}
+          onClick={this.props.decimal}
+          keyCode='110'
+        />
+        <Button 
+          idp="equals"
+          value="="
+          style={equalsStyle}
+          onClick={this.props.evaluate}
+          keyCode='13'
+        />
+      </div>
+    )
+  }
+}
+
+class Button extends React.Component{
+  constructor(props){
+    super(props);
+    
+    this.state={
+      pressed: false
+    }
+    
+    this.handleKeyPress = this.handleKeyPress.bind(this);
+  }
+  
+  componentDidMount(){
+    document.addEventListener('keydown', this.handleKeyPress);
+  }
+  
+  componentWillUnmount(){
+    document.removeEventListener('keydown', this.handleKeyPress);  
+  }
+  
+  handleKeyPress(e){
+    if(e.keyCode == this.props.keyCode){
+      const ev = {
+        target: {
+          value: this.props.value
+        }
+      }
+      
+      this.props.onClick(ev);
+    }
+  }
+    
+  render(){
+    return(
+      <button 
+          id={this.props.idp}
+          value={this.props.value}
+          style={this.state.pressed === true ? pressedStyle : this.props.style}
+          className={this.props.className}
+          onClick={this.props.onClick}
+          onKeyPress={this.handleKeyPress}
+        >
+        {this.props.value}
+      </button>
+    )
+  }
+}
+
+class Output extends React.Component{
+  constructor(props){
+    super(props);
+  }
+  
+  render(){
+    return(
+      <div id="display">
+        <p>{this.props.currentVal}</p>
+      </div>
+    )
+  }
+}
+
+class Forumula extends React.Component{
+  constructor(props){
+    super(props);
+  }
+  
+  render(){
+    return(
+      <div id="formula">
+        <p>{this.props.formula}</p>
+      </div>
+    )
+  }
+}
+
+//React-Redux
+
+const Provider = ReactRedux.Provider;
+const connect = ReactRedux.connect;
+
+const mapStateToProps = (state)=>{
+  return{
+    currentVal: state.currentVal,
+    prevVal: state.prevVal,
+    formula: state.formula,
+  }
+}
+
+const mapDispatchToProps = (dispatch)=>{
+  return{
+    dispatchClear: ()=>{dispatch(doClear())},
+    dispatchNumbers: (newValue)=>{dispatch(doNewVal(newValue))},
+    //change entire state
+    dispatchState: (newState)=>{dispatch(doNewState(newState))}
+                                  
+  }
+}
+
+const REComponent = connect(mapStateToProps, mapDispatchToProps)(Calculator)
+
+class AppWrapper extends React.Component{
+  
+  render(){
+    return(
+      <Provider store={store}>
+        <REComponent/>
+      </Provider>
+    )
+  }
+}
+
+ReactDOM.render(<AppWrapper/>, document.getElementById("app"));
